@@ -48,7 +48,9 @@ init({AMQPArgs}) ->
                 #amqp_params_direct{username=U, password=Pw, node=Node}
         end,
     {ok, Conn} = amqp_connection:start(ConnParams),
+    erlang:monitor(process, Conn),
     {ok, Chan} = amqp_connection:open_channel(Conn),
+    erlang:monitor(process, Chan),
     {connection,ConnOpts} = proplists:lookup(connection,AMQPArgs),
     {queue,QueueOpts} = proplists:lookup(queue,AMQPArgs),
     Queue = proplists:get_value(queue, QueueOpts, <<"queue">>),
