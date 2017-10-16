@@ -100,12 +100,26 @@ handle_cast(_Msg, State) ->
 handle_info({#'basic.deliver'{delivery_tag = DT}, #amqp_msg{ payload = Data }},
             #?STATE{amqp_channel = Chan} = State) ->
     % io:format("handle_info ~p #'basic.deliver' delivery_tag = ~p ~p~n", [?MODULE, DT, Data]),
-    %% Acknoledge
-    ACK = #'basic.ack'{
-        delivery_tag = DT,
-        multiple = false
-    },
-    ok = amqp_channel:call(Chan, ACK),
+    {A,B,C} = erlang:now(),
+    random:seed(A,B,C),
+    Msg = 
+        case random:uniform() > 0.5 of
+            true ->
+                io:format("~p NOACK picked up ~p~n", [self(),Data]),
+                #'basic.nack'{
+                    delivery_tag = DT,
+                    multiple = false,
+                    requeue = true
+                };
+            false ->
+                io:format("~p ACK picked up ~p~n", [self(),Data]),
+                %% Acknoledge
+                #'basic.ack'{
+                    delivery_tag = DT,
+                    multiple = false
+                }
+        end,
+    ok = amqp_channel:call(Chan, Msg),
     {noreply, State};
 handle_info(#'basic.consume_ok'{consumer_tag = CT}, State) ->
     io:format("handle_info ~p #'basic.consume_ok' consumer_tag = ~p ~n", [?MODULE, CT]),
