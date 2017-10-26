@@ -109,6 +109,9 @@ produce(Chan, Queue, Data) ->
     AMQPMsg = #amqp_msg{props = P,
                         payload = Data},
     try
+        % io:format("produce ~p #amqp_msg{props = ~p,payload = ~p}~n",
+        %     [?MODULE, P, Data]
+        % ),
         ok = amqp_channel:call(Chan, Pub, AMQPMsg)
     catch
         C:E ->

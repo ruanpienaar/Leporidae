@@ -6,6 +6,9 @@
   {applications, [
                   kernel,
                   stdlib
+                  % Can't easily seem to get rebar3 happy
+                  % and amqp_utils won't compile nicely as a dep
+                  % amqp_client
                  ]},
   {mod, { leporidae_app, []}},
   {env, []}

@@ -4,6 +4,7 @@ compile: rebar3 get-deps
 	@ls amqp_client || git clone https://github.com/ruanpienaar/rabbitmq-erlang-client.git amqp_client
 	@make -C amqp_client
 	@./rebar3 compile
+	@./rebar3 escriptize
 
 get-deps:
 	@./rebar3 get-deps
