@@ -104,10 +104,14 @@ handle_call(consume, _From, #?STATE{queue = Queue, amqp_channel = Chan} = State)
     R = #'basic.consume_ok'{consumer_tag = CT} = amqp_channel:call(Chan, BC),
     io:format("handle_call ~p ~p ~n", [?MODULE, R]),
     {reply, ok, State};
-handle_call(_Request, _From, State) ->
+handle_call(Request, _From, State) ->
+    io:format("unknown_call ~p~n", [Request]),
+    print_state(State),
     {reply, {error, unknown_call}, State}.
 
-handle_cast(_Msg, State) ->
+handle_cast(Msg, State) ->
+    io:format("unknown_cast ~p~n", [Msg]),
+    print_state(State),
     {noreply, State}.
 
 handle_info({#'basic.deliver'{delivery_tag = DT}, #amqp_msg{ payload = Data }},
@@ -144,7 +148,7 @@ code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
 print_state(State) ->
-    [lep_consume_state | FieldValues] = tuple_to_list(State),
+    [?STATE | FieldValues] = tuple_to_list(State),
     io:format(
         "State:~p~n",
         [lists:zip(record_info(fields, ?STATE), FieldValues)]

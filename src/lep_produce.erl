@@ -97,12 +97,19 @@ handle_call({produce, Data}, _From, #?STATE{ queue = Queue, amqp_channel = Chan 
             {reply, ok, State};
         {error, ErrorState} ->
             {stop, normal,State}
-    end.
+    end;
+handle_call(Request, _From, State) ->
+    io:format("unknown_call ~p~n", [Request]),
+    print_state(State),
+    {reply, {error, unknown_call}, State}.
 
-handle_cast(_Msg, State) ->
+handle_cast(Msg, State) ->
+    io:format("unknown_cast ~p~n", [Msg]),
+    print_state(State),
     {noreply, State}.
 
 handle_info(Info, State) ->
+    print_state(State),
     io:format("~p handle_info ~p", [?MODULE, Info]),
     {noreply, State}.
 
@@ -132,3 +139,10 @@ produce(Chan, Queue, Data) ->
             %% TODO: maybe check the status of those pids:
             {error, {C,E,erlang:get_stacktrace()}}
     end.
+
+print_state(State) ->
+    [?STATE | FieldValues] = tuple_to_list(State),
+    io:format(
+        "State:~p~n",
+        [lists:zip(record_info(fields, ?STATE), FieldValues)]
+    ).
