@@ -86,7 +86,7 @@ init({AMQPArgs}) ->
         "" ->
             ok;
         _ -> % Mandatory for non "" Exchange
-            {routing_key, RoutingKey} = 
+            RoutingKey = 
                 proplists:get_value(routing_key, AMQPArgs),
             QB = #'queue.bind'{
                 queue = Queue,
