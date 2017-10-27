@@ -52,6 +52,19 @@ init({AMQPArgs}) ->
     {ok, Chan} = amqp_connection:open_channel(Conn),
     erlang:monitor(process, Chan),
     {connection,ConnOpts} = proplists:lookup(connection,AMQPArgs),
+    {exchange, ExchangeOpts} = proplists:lookup(exchange, AMQPArgs),
+    DE = #'exchange.declare'{
+        ticket = proplists:get_value(ticket, ExchangeOpts, 0),
+        exchange = proplists:get_value(exchange, ExchangeOpts, ""),
+        type = proplists:get_value(type, ExchangeOpts, <<"direct">>),
+        passive = proplists:get_value(passive, ExchangeOpts, false),
+        durable = proplists:get_value(durable, ExchangeOpts, false),
+        auto_delete = proplists:get_value(auto_delete, ExchangeOpts, false),
+        internal = proplists:get_value(internal, ExchangeOpts, false),
+        nowait = proplists:get_value(nowait, ExchangeOpts, false),
+        arguments = proplists:get_value(arguments, ExchangeOpts, [])
+    },
+    #'exchange.declare_ok'{} = amqp_channel:call(Chan, DE),
     {queue,QueueOpts} = proplists:lookup(queue,AMQPArgs),
     Queue = proplists:get_value(queue, QueueOpts, <<"queue">>),
     DQ =
@@ -99,6 +112,7 @@ handle_cast(_Msg, State) ->
 
 handle_info({#'basic.deliver'{delivery_tag = DT}, #amqp_msg{ payload = Data }},
             #?STATE{amqp_channel = Chan} = State) ->
+    print_state(State),
     % io:format("handle_info ~p #'basic.deliver' delivery_tag = ~p ~p~n", [?MODULE, DT, Data]),
     %% Acknoledge
     ACK = #'basic.ack'{
@@ -108,9 +122,18 @@ handle_info({#'basic.deliver'{delivery_tag = DT}, #amqp_msg{ payload = Data }},
     ok = amqp_channel:call(Chan, ACK),
     {noreply, State};
 handle_info(#'basic.consume_ok'{consumer_tag = CT}, State) ->
+    print_state(State),
     io:format("handle_info ~p #'basic.consume_ok' consumer_tag = ~p ~n", [?MODULE, CT]),
     {noreply, State};
+handle_info(D={'DOWN', Ref, process, Pid, {socket_error,timeout}}, 
+            #?STATE{ amqp_connection = C, amqp_channel = CH }=State) ->
+    print_state(State),
+    io:format("Connection : ~p~n", [C]),
+    io:format("Channel    : ~p~n", [CH]),
+    io:format("DOWN       : ~p~n", [D]),
+    {noreply, State};
 handle_info(Info, State) ->
+    print_state(State),
     io:format("handle_info ~p handle_info ~p", [?MODULE, Info]),
     {noreply, State}.
 
@@ -119,3 +142,10 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+print_state(State) ->
+    [lep_consume_state | FieldValues] = tuple_to_list(State),
+    io:format(
+        "State:~p~n",
+        [lists:zip(record_info(fields, ?STATE), FieldValues)]
+    ).

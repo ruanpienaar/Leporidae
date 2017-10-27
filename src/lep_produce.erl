@@ -55,6 +55,19 @@ init({AMQPArgs}) ->
     {ok, Chan} = amqp_connection:open_channel(Conn),
     erlang:monitor(process, Chan),
     {connection,ConnOpts} = proplists:lookup(connection,AMQPArgs),
+    {exchange, ExchangeOpts} = proplists:lookup(exchange, AMQPArgs),
+    DE = #'exchange.declare'{
+        ticket = proplists:get_value(ticket, ExchangeOpts, 0),
+        exchange = proplists:get_value(exchange, ExchangeOpts, ""),
+        type = proplists:get_value(type, ExchangeOpts, <<"direct">>),
+        passive = proplists:get_value(passive, ExchangeOpts, false),
+        durable = proplists:get_value(durable, ExchangeOpts, false),
+        auto_delete = proplists:get_value(auto_delete, ExchangeOpts, false),
+        internal = proplists:get_value(internal, ExchangeOpts, false),
+        nowait = proplists:get_value(nowait, ExchangeOpts, false),
+        arguments = proplists:get_value(arguments, ExchangeOpts, [])
+    },
+    #'exchange.declare_ok'{} = amqp_channel:call(Chan, DE),
     {queue,QueueOpts} = proplists:lookup(queue,AMQPArgs),
     Queue = proplists:get_value(queue, QueueOpts, <<"queue">>),
     DQ =
