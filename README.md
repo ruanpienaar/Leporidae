@@ -3,9 +3,7 @@ Leporidae
 
 ## Getting started
 ( edit sys.config )
-```
 have a look at the example [sys.config]{https://github.com/ruanpienaar/leporidae/blob/master/sys.config}
-```
 
 ### Running it
 make
