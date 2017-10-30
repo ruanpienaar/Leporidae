@@ -9,13 +9,13 @@ main(["-c"|Rest]) ->
     timer:sleep(500),
     start_lep(consume, Rest);
 main(["-p", Payload | Rest]) ->
-    start_lep({produce, list_to_binary(Payload)}, Rest);
+    start_lep({publish, list_to_binary(Payload)}, Rest);
 main(_) ->
     help().
 
 help() ->
     io:format("./~p -c Msg / -p Msg~n", [?MODULE]),
-    io:format(" -c ( Consume ) OR -p ( produce ) -t TIMEOUT (ms)~n"),
+    io:format(" -c ( Consume ) OR -p ( publish ) -t TIMEOUT (ms)~n"),
     io:format(
         "procucer and consumer connectivity details read from sys.config~n"),
     erlang:halt(0).
@@ -49,7 +49,7 @@ start_lep(Type, RestArgs) ->
                 lists:keyfind(consumers, 1, LeporidaeConfig),
             ok = application:set_env(leporidae, consumers, Consumers),
             ok = application:set_env(leporidae, producers, []);
-        {produce, Payload} ->
+        {publish, Payload} ->
             Pid = register(producer,
                 spawn(fun() -> payload_sender_loop(Payload) end)
             ),
@@ -86,6 +86,6 @@ get_timeout([_Rest]) ->
 payload_sender_loop(Payload) ->
     receive
         produce ->
-            ok = lep_produce:produce(Payload),
+            ok = lep_produce:publish(Payload),
             payload_sender_loop(Payload)
     end.

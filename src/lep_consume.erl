@@ -13,9 +13,8 @@
 
 -define(STATE, lep_consume_state).
 -record(?STATE, {
-    connected = false,
+    amqp_args,
     queue,
-    amqp_connection_opts,
     amqp_connection,
     amqp_channel
 }).
@@ -32,26 +31,8 @@ consume() ->
     gen_server:call(Pid, consume).
 
 init({AMQPArgs}) ->
-    {connection,ConnOpts} = proplists:lookup(connection,AMQPArgs),
-    ConnParams =
-        case proplists:lookup(type, ConnOpts) of
-            {type,network} ->
-                {username,U}  = proplists:lookup(username, ConnOpts),
-                {passwd,Pw} = proplists:lookup(passwd, ConnOpts),
-                {host,H}  = proplists:lookup(host, ConnOpts),
-                {port,Po} = proplists:lookup(port, ConnOpts),
-                #amqp_params_network{username=U, password=Pw, host=H, port=Po};
-            {type,direct} ->
-                {username,U}  = proplists:lookup(username, ConnOpts),
-                {passwd,Pw} = proplists:lookup(passwd, ConnOpts),
-                {node,Node} = proplists:lookup(node, ConnOpts),
-                #amqp_params_direct{username=U, password=Pw, node=Node}
-        end,
-    {ok, Conn} = amqp_connection:start(ConnParams),
-    erlang:monitor(process, Conn),
-    {ok, Chan} = amqp_connection:open_channel(Conn),
-    erlang:monitor(process, Chan),
-    {queue,QueueOpts} = proplists:lookup(queue,AMQPArgs),
+    {ok, Conn, Chan} = do_estb_conn(AMQPArgs),
+    {queue, QueueOpts} = proplists:lookup(queue, AMQPArgs),
     Queue = proplists:get_value(queue, QueueOpts, <<"queue">>),
     DQ =
         #'queue.declare'{
@@ -96,9 +77,8 @@ init({AMQPArgs}) ->
     #'basic.consume_ok'{} = amqp_channel:subscribe(Chan, BC, self()),
     % ok = amqp_channel:register_default_consumer(Chan, self()),
     {ok, #?STATE{
-        connected = true,
+        amqp_args = AMQPArgs,
         queue = Queue,
-        amqp_connection_opts = ConnOpts,
         amqp_connection = Conn,
         amqp_channel = Chan
     }}.
@@ -141,12 +121,18 @@ handle_info(#'basic.consume_ok'{consumer_tag = CT}, State) ->
     io:format("handle_info ~p #'basic.consume_ok' consumer_tag = ~p ~n", [?MODULE, CT]),
     {noreply, State};
 handle_info(D={'DOWN', Ref, process, Pid, {socket_error,timeout}}, 
-            #?STATE{ amqp_connection = C, amqp_channel = CH }=State) ->
+            #?STATE{ amqp_args = AMQPArgs,
+                     amqp_connection = C,
+                     amqp_channel = CH } = State) ->
     print_state(State),
     io:format("Connection : ~p~n", [C]),
     io:format("Channel    : ~p~n", [CH]),
     io:format("DOWN       : ~p~n", [D]),
-    {noreply, State};
+    {ok, Conn, Chan} = do_estb_conn(AMQPArgs),
+    {noreply, State#?STATE{
+        amqp_connection = Conn,
+        amqp_channel = Chan
+    }};
 handle_info(Info, State) ->
     print_state(State),
     io:format("handle_info ~p handle_info ~p", [?MODULE, Info]),
@@ -164,3 +150,9 @@ print_state(State) ->
         "State:~p~n",
         [lists:zip(record_info(fields, ?STATE), FieldValues)]
     ).
+
+do_estb_conn(AMQPArgs) ->
+    {ok, Conn, Chan} = lep_common:establish_channel(AMQPArgs),
+    erlang:monitor(process, Conn),
+    erlang:monitor(process, Chan),
+    {ok, Conn, Chan}.

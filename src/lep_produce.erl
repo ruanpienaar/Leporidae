@@ -3,7 +3,7 @@
 -export([
     start/1,
     start_link/1,
-    produce/1
+    publish/2
 ]).
 
 -behaviour(gen_server).
@@ -13,9 +13,8 @@
 
 -define(STATE, lep_produce_state).
 -record(?STATE, {
-    connected = false,
+    amqp_args,
     queue,
-    amqp_connection_opts,
     amqp_connection,
     amqp_channel
 }).
@@ -26,35 +25,19 @@ start(AMQPArgs) ->
 start_link(AMQPArgs) ->
     gen_server:start_link(?MODULE, {AMQPArgs}, []).
 
-produce(Data) when is_binary(Data) ->
-    case lep_load_spread:next_producer_pid() of
-        Pid when is_pid(Pid) ->
-            gen_server:call(Pid, {produce, Data});
-        false ->
-            {error, no_producers}
-    end.
+publish(ProducerPid, Payload) when is_binary(Payload) ->
+    % Load balance only across the same queue settings
+    % case lep_load_spread:next_producer_pid() of
+    %     Pid when is_pid(Pid) ->
+    %         gen_server:call(Pid, {publish, Payload});
+    %     false ->
+    %         {error, no_producers}
+    % end.
+    gen_server:call(ProducerPid, {publish, Payload}).
 
 init({AMQPArgs}) ->
-    {connection,ConnOpts} = proplists:lookup(connection,AMQPArgs),
-    ConnParams =
-        case proplists:lookup(type, ConnOpts) of
-            {type,network} ->
-                {username,U}  = proplists:lookup(username, ConnOpts),
-                {passwd,Pw} = proplists:lookup(passwd, ConnOpts),
-                {host,H}  = proplists:lookup(host, ConnOpts),
-                {port,Po} = proplists:lookup(port, ConnOpts),
-                #amqp_params_network{username=U, password=Pw, host=H, port=Po};
-            {type,direct} ->
-                {username,U}  = proplists:lookup(username, ConnOpts),
-                {passwd,Pw} = proplists:lookup(passwd, ConnOpts),
-                {node,Node} = proplists:lookup(node, ConnOpts),
-                #amqp_params_direct{username=U, password=Pw, node=Node}
-        end,
-    {ok, Conn} = amqp_connection:start(ConnParams),
-    erlang:monitor(process, Conn),
-    {ok, Chan} = amqp_connection:open_channel(Conn),
-    erlang:monitor(process, Chan),
-    {queue, QueueOpts} = proplists:lookup(queue,AMQPArgs),
+    {ok, Conn, Chan} = do_estb_conn(AMQPArgs),
+    {queue, QueueOpts} = proplists:lookup(queue, AMQPArgs),
     Queue = proplists:get_value(queue, QueueOpts, <<"queue">>),
     DQ =
         #'queue.declare'{
@@ -97,15 +80,19 @@ init({AMQPArgs}) ->
     end,
     true = lep_load_spread:add_producer_pid(self()),
     {ok, #?STATE{
-        connected = true,
+        amqp_args = AMQPArgs,
         queue = Queue,
-        amqp_connection_opts = ConnOpts,
         amqp_connection = Conn,
         amqp_channel = Chan
     }}.
 
-handle_call({produce, Data}, _From, #?STATE{ queue = Queue, amqp_channel = Chan } = State) ->
-    case produce(Chan, Queue, Data) of
+handle_call({publish, Payload}, _From, #?STATE{
+        amqp_args = AMQPArgs, 
+        amqp_channel = Chan } = State) ->
+    % case do_publish(Chan, Queue, Data) of
+    RoutingKey = 
+        proplists:get_value(routing_key, AMQPArgs),
+    case do_publish(Chan, [{routing_key, RoutingKey}], [], Payload) of
         ok ->
             {reply, ok, State};
         {error, ErrorState} ->
@@ -121,6 +108,19 @@ handle_cast(Msg, State) ->
     print_state(State),
     {noreply, State}.
 
+handle_info(D={'DOWN', Ref, process, Pid, {socket_error,timeout}}, 
+            #?STATE{ amqp_args = AMQPArgs,
+                     amqp_connection = C,
+                     amqp_channel = CH } = State) ->
+    print_state(State),
+    io:format("Connection : ~p~n", [C]),
+    io:format("Channel    : ~p~n", [CH]),
+    io:format("DOWN       : ~p~n", [D]),
+    {ok, Conn, Chan} = do_estb_conn(AMQPArgs),
+    {noreply, State#?STATE{
+        amqp_connection = Conn,
+        amqp_channel = Chan
+    }};
 handle_info(Info, State) ->
     print_state(State),
     io:format("~p handle_info ~p", [?MODULE, Info]),
@@ -133,16 +133,50 @@ terminate(_Reason, _State) ->
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-produce(Chan, Queue, Data) ->
-    P = #'P_basic'{ content_type = <<"text/plain">> },
+do_publish(Chan, BasicPub, AmqpProps, Payload) ->
     Pub = #'basic.publish'{
-        % exchange = Exchange,
-        routing_key = Queue
+        ticket = proplists:get_value(content_encoding, BasicPub, 0),
+        exchange = proplists:get_value(exchange, BasicPub, <<"">>),
+        routing_key = proplists:get_value(routing_key, BasicPub, <<"">>),
+        mandatory = proplists:get_value(mandatory, BasicPub, false),
+        immediate = proplists:get_value(immediate, BasicPub, false)
     },
-    AMQPMsg = #amqp_msg{props = P,
-                        payload = Data},
+    Props = #'P_basic'{
+        content_type = 
+            proplists:get_value(content_type, AmqpProps, <<"text/plain">>),
+        content_encoding = 
+            proplists:get_value(content_encoding, AmqpProps),
+        headers = 
+            proplists:get_value(headers, AmqpProps),
+        delivery_mode = 
+            proplists:get_value(delivery_mode, AmqpProps),
+        priority = 
+            proplists:get_value(priority, AmqpProps),
+        correlation_id =
+            proplists:get_value(correlation_id, AmqpProps),
+        reply_to =
+            proplists:get_value(reply_to, AmqpProps),
+        expiration =
+            proplists:get_value(expiration, AmqpProps),
+        message_id =
+            proplists:get_value(message_id, AmqpProps),
+        timestamp =
+            proplists:get_value(timestamp, AmqpProps),
+        type =
+            proplists:get_value(type, AmqpProps),
+        user_id =
+            proplists:get_value(user_id, AmqpProps),
+        app_id =
+            proplists:get_value(app_id, AmqpProps),
+        cluster_id = 
+            proplists:get_value(cluster_id, AmqpProps)
+    },
+    AMQPMsg = #amqp_msg{
+        props = Props,
+        payload = Payload
+    },
     try
-        % io:format("produce ~p #amqp_msg{props = ~p,payload = ~p}~n",
+        % io:format("publish ~p #amqp_msg{props = ~p,payload = ~p}~n",
         %     [?MODULE, P, Data]
         % ),
         ok = amqp_channel:call(Chan, Pub, AMQPMsg)
@@ -159,3 +193,9 @@ print_state(State) ->
         "State:~p~n",
         [lists:zip(record_info(fields, ?STATE), FieldValues)]
     ).
+
+do_estb_conn(AMQPArgs) ->
+    {ok, Conn, Chan} = lep_common:establish_channel(AMQPArgs),
+    erlang:monitor(process, Conn),
+    erlang:monitor(process, Chan),
+    {ok, Conn, Chan}.
