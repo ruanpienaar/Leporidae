@@ -4,59 +4,7 @@ Leporidae
 ## Getting started
 ( edit sys.config )
 ```
-[
- {leporidae,
-    [
-        {producers,[
-            {amqp, [
-                %% Localhost
-                {connection, [
-                    {type, network},
-                    {username, <<"root">>},
-                    {passwd, <<"root">>},
-                    {vhost, <<"/">>},
-                    {host, "127.0.0.1"},
-                    {port, 5672}
-                ]},
-                {queue, [
-                    {ticket, 0},
-                    {queue, <<"leporidae">>},
-                    {passive, false},
-                    {durable, true},
-                    {exclusive, false},
-                    {auto_delete, false},
-                    {nowait, false},
-                    {arguments, []}
-                ]}
-            ]}
-        ]},
-
-        {consumers,[
-            %% Localhost
-            {amqp, [
-                {connection, [
-                    {type, network},
-                    {username, <<"root">>},
-                    {passwd, <<"root">>},
-                    {vhost, <<"/">>},
-                    {host, "127.0.0.1"},
-                    {port, 5672}
-                ]},
-                {queue, [
-                    {ticket, 0},
-                    {queue, <<"leporidae">>},
-                    {passive, false},
-                    {durable, true},
-                    {exclusive, false},
-                    {auto_delete, false},
-                    {nowait, false},
-                    {arguments, []}
-                ]}
-            ]}
-        ]}
-    ]}
-].
-
+have a look at the example [sys.config]{https://github.com/ruanpienaar/leporidae/blob/master/sys.config}
 ```
 
 ### Running it
