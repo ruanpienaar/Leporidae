@@ -13,7 +13,10 @@
 
 -define(STATE, lep_consume_state).
 -record(?STATE, {
-    amqp_args,
+    amqp_args = undefined,
+    connected = false,
+    conn_mon_ref,
+    chan_mon_ref,
     queue,
     amqp_connection,
     amqp_channel
@@ -92,8 +95,8 @@ handle_call(consume, _From, #?STATE{queue = Queue, amqp_channel = Chan} = State)
         nowait = false,
         arguments = []
     },
-    R = #'basic.consume_ok'{consumer_tag = CT} = amqp_channel:call(Chan, BC),
-    io:format("handle_call ~p ~p ~n", [?MODULE, R]),
+    R = #'basic.consume_ok'{consumer_tag = _CT} = amqp_channel:call(Chan, BC),
+    io:format("handle_call ~p ~p~n", [?MODULE, R]),
     {reply, ok, State};
 handle_call(Request, _From, State) ->
     io:format("unknown_call ~p~n", [Request]),
@@ -105,7 +108,9 @@ handle_cast(Msg, State) ->
     print_state(State),
     {noreply, State}.
 
-handle_info({#'basic.deliver'{delivery_tag = DT}, #amqp_msg{ payload = Data }},
+% handle_info({'DOWN',Ref,process,Pid,Reason}, State) ->
+%     {noreply, State};
+handle_info({#'basic.deliver'{delivery_tag = DT}, #amqp_msg{ payload = _Data }},
             #?STATE{amqp_channel = Chan} = State) ->
     print_state(State),
     % io:format("handle_info ~p #'basic.deliver' delivery_tag = ~p ~p~n", [?MODULE, DT, Data]),

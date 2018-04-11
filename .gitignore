@@ -9,3 +9,9 @@ rel/example_project
 .concrete/DEV_MODE
 .rebar
 _build
+.tags
+.tags_sorted_by_file
+amqp_client/
+log/
+rebar.lock
+rebar3

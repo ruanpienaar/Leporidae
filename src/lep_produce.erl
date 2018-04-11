@@ -69,7 +69,7 @@ init({AMQPArgs}) ->
         "" ->
             ok;
         _ -> % Mandatory for non "" Exchange
-            RoutingKey = 
+            RoutingKey =
                 proplists:get_value(routing_key, AMQPArgs),
             QB = #'queue.bind'{
                 queue = Queue,
@@ -87,16 +87,16 @@ init({AMQPArgs}) ->
     }}.
 
 handle_call({publish, Payload}, _From, #?STATE{
-        amqp_args = AMQPArgs, 
+        amqp_args = AMQPArgs,
         amqp_channel = Chan } = State) ->
     % case do_publish(Chan, Queue, Data) of
-    RoutingKey = 
+    RoutingKey =
         proplists:get_value(routing_key, AMQPArgs),
     case do_publish(Chan, [{routing_key, RoutingKey}], [], Payload) of
         ok ->
             {reply, ok, State};
         {error, ErrorState} ->
-            {stop, normal,State}
+            {stop, normal, ErrorState}
     end;
 handle_call(Request, _From, State) ->
     io:format("unknown_call ~p~n", [Request]),
@@ -108,7 +108,7 @@ handle_cast(Msg, State) ->
     print_state(State),
     {noreply, State}.
 
-handle_info(D={'DOWN', Ref, process, Pid, {socket_error,timeout}}, 
+handle_info(D={'DOWN', _Ref, process, _Pid, {socket_error,timeout}},
             #?STATE{ amqp_args = AMQPArgs,
                      amqp_connection = C,
                      amqp_channel = CH } = State) ->
@@ -142,15 +142,15 @@ do_publish(Chan, BasicPub, AmqpProps, Payload) ->
         immediate = proplists:get_value(immediate, BasicPub, false)
     },
     Props = #'P_basic'{
-        content_type = 
+        content_type =
             proplists:get_value(content_type, AmqpProps, <<"text/plain">>),
-        content_encoding = 
+        content_encoding =
             proplists:get_value(content_encoding, AmqpProps),
-        headers = 
+        headers =
             proplists:get_value(headers, AmqpProps),
-        delivery_mode = 
+        delivery_mode =
             proplists:get_value(delivery_mode, AmqpProps),
-        priority = 
+        priority =
             proplists:get_value(priority, AmqpProps),
         correlation_id =
             proplists:get_value(correlation_id, AmqpProps),
@@ -168,7 +168,7 @@ do_publish(Chan, BasicPub, AmqpProps, Payload) ->
             proplists:get_value(user_id, AmqpProps),
         app_id =
             proplists:get_value(app_id, AmqpProps),
-        cluster_id = 
+        cluster_id =
             proplists:get_value(cluster_id, AmqpProps)
     },
     AMQPMsg = #amqp_msg{
