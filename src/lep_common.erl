@@ -8,7 +8,7 @@
     do_producer_rest_init/3
 ]).
 
--spec establish_connection_channel(proplists:proplist()) 
+-spec establish_connection_channel(proplists:proplist())
         -> {ok, pid(), pid()} |
            {error, {conn_error, term()}} |
            {error, {chan_error, term(), pid()}}.
@@ -41,7 +41,9 @@ establish_channel(Conn) ->
         {ok, Chan} ->
             {ok, Conn, Chan};
         {error, ChanError} ->
-            {error, {chan_error, ChanError, Conn}}
+            {error, {chan_error, ChanError, Conn}};
+        closing ->
+            {error, {chan_error, closing, Conn}}
     end.
 
 do_producer_rest_init(Conn, Chan, AMQPArgs) ->
@@ -86,11 +88,5 @@ do_producer_rest_init(Conn, Chan, AMQPArgs) ->
             },
             #'queue.bind_ok'{} = amqp_channel:call(Chan, QB)
     end,
-    true = lep_load_spread:add_producer_pid(self()),
-    % {ok, #?STATE{
-    %     amqp_args = AMQPArgs,
-    %     queue = Queue,
-    %     amqp_connection = Conn,
-    %     amqp_channel = Chan
-    % }}.
+    % true = lep_load_spread:add_producer_pid(self()),
     {ok, Queue, Exchange}.
