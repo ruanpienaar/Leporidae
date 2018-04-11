@@ -6,7 +6,10 @@
 -export([start_link/0]).
 
 %% Supervisor callbacks
--export([init/1]).
+-export([
+    init/1,
+    consumers/0
+]).
 
 %% Helper macro for declaring children of supervisor
 -define(CHILD(I, Mod, Type), {I, {Mod, start_link, []}, permanent, 100, Type, [Mod]}).
@@ -38,5 +41,9 @@ init({}) ->
          Count+1
         }
     end, {[], 1}, ConsumersConfig),
-    RestartStrategy = {one_for_one, 5, 10},
+    RestartStrategy = {one_for_one, 100, 60},
     {ok, {RestartStrategy, Consumers}}.
+
+-spec consumers() -> proplists:proplist().
+consumers() ->
+    [ {Id, Pid} || {Id, Pid, _, _} <- supervisor:which_children(?MODULE) ].

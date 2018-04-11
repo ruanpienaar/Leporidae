@@ -3,7 +3,7 @@
 -export([
     start/1,
     start_link/1,
-    consume/0
+    consume/1
 ]).
 
 -behaviour(gen_server).
@@ -28,9 +28,9 @@ start(AMQPArgs) ->
 start_link(AMQPArgs) ->
     gen_server:start_link(?MODULE, {AMQPArgs}, []).
 
-consume() ->
-    Children = supervisor:which_children(leporidae_sup),
-    {consumer_1,Pid,worker,[consumer_1]} = lists:keyfind(consumer_1, 1, Children),
+consume(Pid) ->
+    % Children = supervisor:which_children(leporidae_sup),
+    % {consumer_1,Pid,worker,[consumer_1]} = lists:keyfind(consumer_1, 1, Children),
     gen_server:call(Pid, consume).
 
 init({AMQPArgs}) ->
