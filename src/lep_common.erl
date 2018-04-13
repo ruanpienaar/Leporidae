@@ -5,7 +5,7 @@
 -export([
     establish_connection_channel/1,
     establish_channel/1,
-    do_producer_rest_init/3
+    bind_queue_exchange/2
 ]).
 
 -spec establish_connection_channel(proplists:proplist())
@@ -46,7 +46,7 @@ establish_channel(Conn) ->
             {error, {chan_error, closing, Conn}}
     end.
 
-do_producer_rest_init(Conn, Chan, AMQPArgs) ->
+bind_queue_exchange(Chan, AMQPArgs) ->
     {queue, QueueOpts} = proplists:lookup(queue, AMQPArgs),
     Queue = proplists:get_value(queue, QueueOpts, <<"queue">>),
     DQ =
