@@ -1,3 +1,4 @@
 -define(DEFAULT_EXCHANGE, <<"">>).
--define(CONSUME_TYPE_MAN, manual_consume).
+-define(CONSUME_TYPE_CONSUME, consume).
+-define(CONSUME_TYPE_GET, get).
 -define(CONSUME_TYPE_SUB, subscription).

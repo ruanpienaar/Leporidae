@@ -8,7 +8,8 @@
 -export([
     start_link/1,
     state/1,
-    consume/1
+    % consume/1,
+    get/1
 ]).
 
 %% State M exports
@@ -32,8 +33,11 @@ start_link(AMQPArgs) ->
 state(Pid) ->
     sys:get_state(Pid).
 
-consume(Pid) ->
-    gen_statem:call(Pid, consume, 1000).
+% consume(Pid) ->
+%     gen_statem:call(Pid, consume, 1000).
+
+get(Pid) ->
+    gen_statem:call(Pid, get, 1000).
 
 % publish(Pid, Data) ->
 %     gen_statem:call(Pid, {publish, Data}).
@@ -48,18 +52,30 @@ init({AMQPArgs}) ->
     {queue, QueueOpts} = proplists:lookup(queue, AMQPArgs),
     {queue, Queue} = proplists:lookup(queue, QueueOpts),
     Consume = [{queue, Queue} | proplists:get_value(consume, AMQPArgs, [])],
-    ConsType = proplists:get_value(consume_type, AMQPArgs, ?CONSUME_TYPE_MAN),
+    Get = [{queue, Queue} | proplists:get_value(get, AMQPArgs, [])],
+    ConsType = proplists:get_value(consume_type, AMQPArgs, ?CONSUME_TYPE_GET),
+    ConnectedActions =
+        case ConsType of
+            ?CONSUME_TYPE_CONSUME ->
+                % TODO: should we have mulitple consumers
+                [{timeout, 0, start_consumer}];
+            ?CONSUME_TYPE_GET ->
+                [];
+            ?CONSUME_TYPE_SUB ->
+                [{timeout, 0, establish_subscription}]
+        end,
     StateData =
         #{ amqp_args => AMQPArgs,
            consume => Consume,
-           consume_type => ConsType,
+           get => Get,
            amqp_connection => undefined,
            amqp_channel => undefined,
            conn_ref => undefined,
            chan_ref => undefined,
            amqp_queue => undefined,
            amqp_exchange => undefined,
-           last_error => undefined
+           last_error => undefined,
+           connected_actions => ConnectedActions
         },
     {ok, notconnection, StateData, [{timeout, 0, establish_connection} ]}.
 
@@ -87,21 +103,13 @@ handle_event(timeout, EventContent=establish_connection, notconnection, StateDat
     #{amqp_args := AMQPArgs,
       amqp_connection := undefined,
       amqp_channel := undefined,
-      consume_type := ConsType
-    } = StateData,
+      connected_actions := Actions } = StateData,
     case lep_common:establish_connection_channel(AMQPArgs) of
         {ok, Conn, Chan} ->
             ConnRef = erlang:monitor(process, Conn),
             ChanRef = erlang:monitor(process, Chan),
             {ok, Queue, Exchange} =
                 lep_common:bind_queue_exchange(Chan, AMQPArgs),
-            Actions =
-                case ConsType of
-                    ?CONSUME_TYPE_MAN ->
-                        [];
-                    ?CONSUME_TYPE_SUB ->
-                        [{timeout, 0, establish_subscription}]
-                end,
             {next_state, connected_and_chan, StateData#{
                 amqp_connection => Conn,
                 amqp_channel => Chan,
@@ -145,19 +153,12 @@ handle_event(timeout, EventContent=establish_channel, connected_notchannel, Stat
     #{amqp_args := AMQPArgs,
       amqp_connection := Conn,
       amqp_channel := undefined,
-      consume_type := ConsType} = StateData,
+      connected_actions := Actions} = StateData,
     case lep_common:establish_channel(Conn) of
         {ok, Conn, Chan} ->
             ChanRef = erlang:monitor(process, Chan),
             {ok, Queue, Exchange} =
                 lep_common:bind_queue_exchange(Chan, AMQPArgs),
-            Actions =
-                case ConsType of
-                    ?CONSUME_TYPE_MAN ->
-                        [];
-                    ?CONSUME_TYPE_SUB ->
-                        [{timeout, 0, establish_subscription}]
-                end,
             {next_state, connected_and_chan, StateData#{
                 amqp_channel => Chan,
                 chan_ref => ChanRef,
@@ -181,12 +182,64 @@ handle_event(timeout, EventContent=establish_channel, connected_notchannel, Stat
                 [{timeout, 100, EventContent}]
             }
     end;
+%% ---  Consumer
+handle_event(timeout, start_consumer, connected_and_chan, StateData) ->
+    #{ amqp_channel := Chan,
+       consume := Consume
+    } = StateData,
+    lep_common:do_consume(Chan, list_to_binary(pid_to_list(self())), Consume),
+    {next_state, consuming, StateData};
+handle_event(info, M=#'basic.consume_ok'{consumer_tag = CT}, consuming, StateData) ->
+    lep_common:log(" === ~p CONSUME_OK === ~n~p~n", [self(), M]),
+    % Consumer started on server...
+    % TODO: should we reuse this consumer, or keep creating consumers ?
+    {keep_state, StateData#{ consumer_tag => CT }};
+handle_event(info, {BasicDeliver, AmqpMsg}, consuming, StateData) ->
+    lep_common:log(" === ~p DELIVERY === ~n~p~n", [self(), BasicDeliver]),
+    lep_common:log(" === ~p AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
+    #{ amqp_channel := Chan,
+       consumer_tag := CT,
+       amqp_exchange := Exchange
+       } = StateData,
+    #'basic.deliver'{
+        consumer_tag = CT,
+        delivery_tag = DT
+    } = BasicDeliver,
+    ok = lep_common:do_acknowledge(Chan, [{delivery_tag, DT}, {multiple, false}]),
+    {keep_state, StateData};
+%% ---  Get
+handle_event({call, From}, get, connected_and_chan, StateData) ->
+    #{ amqp_channel := Chan,
+       get := Get} = StateData,
+    Payload = lep_common:do_get(Chan, Get),
+    ok = gen_statem:reply({reply, From, Payload}),
+    keep_state_and_data;
+%% ---  Subscribe
 handle_event(timeout, establish_subscription, connected_and_chan, StateData) ->
     #{amqp_channel := Chan,
       amqp_queue := Queue} = StateData,
     % TODO: fail when subs fail...
     _R = lep_common:do_subscribe(Chan, Queue, self()),
     {next_state, subscribed, StateData};
+handle_event(info, M=#'basic.consume_ok'{consumer_tag = CT}, subscribed, StateData) ->
+    lep_common:log(" === ~p CONSUME_OK === ~n~p~n", [self(), M]),
+    % Consumer started on server...
+    % TODO: should we reuse this consumer, or keep creating consumers ?
+    {keep_state, StateData#{ consumer_tag => CT }};
+handle_event(info, {BasicDeliver, AmqpMsg}, subscribed, StateData) ->
+    lep_common:log(" === ~p DELIVERY === ~n~p~n", [self(), BasicDeliver]),
+    lep_common:log(" === ~p AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
+    #{ amqp_channel := Chan,
+       consumer_tag := CT,
+       amqp_exchange := Exchange
+       } = StateData,
+    #'basic.deliver'{
+        consumer_tag = CT,
+        delivery_tag = DT
+    } = BasicDeliver,
+    ok = lep_common:do_acknowledge(Chan, [{delivery_tag, DT}, {multiple, false}]),
+    {keep_state, StateData};
+%% --- DOWN
 handle_event(info, D={'DOWN', Ref, process, Pid, DownReason}, CurentState, StateData) ->
     #{ amqp_connection := Conn,
        amqp_channel := Chan,
@@ -231,72 +284,9 @@ handle_event(info, D={'DOWN', Ref, process, Pid, DownReason}, CurentState, State
                     }
             end;
         _ ->
-            lep_common:log(" === Unknown DOWN! ~p in state ~p~n", [D, CurentState]),
+            lep_common:log(" === ~p Unknown DOWN! ~p in state ~p ~p~n", [self(), D, CurentState, StateData]),
             keep_state_and_data
     end;
-handle_event({call, From}, consume, connected_and_chan, StateData) ->
-    #{amqp_channel := Chan,
-      consume := Consume} = StateData,
-    % TODO: fail when consume fail
-    lep_common:do_consume(Chan, list_to_binary(pid_to_list(self())), Consume),
-    ok = gen_statem:reply({reply, From, ok}),
-    {next_state, consuming, StateData};
-handle_event({call, From}, consume, consuming, _StateData) ->
-    % TODO basic.get
-    ok = gen_statem:reply({reply, From, ok}),
-    keep_state_and_data;
-handle_event({call, _From}, consume, subscribed, _StateData) ->
-    lep_common:log("Trying to manual consume when already subscribed.~n"),
-    keep_state_and_data;
-handle_event(info, M=#'basic.consume_ok'{consumer_tag = CT}, consuming, StateData) ->
-    lep_common:log("~p === CONSUME_OK === ~n~p~n", [self(), M]),
-    % Consumer started on server...
-    % TODO: should we reuse this consumer, or keep creating consumers ?
-    {keep_state, StateData#{ consumer_tag => CT }};
-handle_event(info, {undefined, AmqpMsg}, consuming, StateData) ->
-    ok;
-handle_event(info, {BasicDeliver, AmqpMsg}, consuming, StateData) ->
-    lep_common:log(" === ~p DELIVERY === ~n~p~n", [self(), BasicDeliver]),
-    lep_common:log(" === ~p AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
-    #{
-       % amqp_args := AMQPArgs,
-       amqp_channel := Chan,
-       consumer_tag := CT,
-       amqp_exchange := Exchange
-       } = StateData,
-    % {routing_key, R} = proplists:lookup(routing_key, AMQPArgs),
-    % #'basic.deliver'{
-    %     consumer_tag = CT,
-    %     delivery_tag = DT,
-    %     redelivered = Redelivered,
-    %     exchange = <<>>,
-    %     routing_key = R
-    % } = BasicDeliver,
-    #'basic.deliver'{
-        consumer_tag = CT,
-        delivery_tag = DT
-    } = BasicDeliver,
-    % #amqp_msg{
-    %     props = #'P_basic'{
-    %         content_type = _ContentType,
-    %         content_encoding = _ContentEncoding,
-    %         headers = _Headers,
-    %         delivery_mode = _DeliveryMode,
-    %         priority = _Priority,
-    %         correlation_id = _CorrelationId,
-    %         reply_to = _ReplyTo,
-    %         expiration = _Expiration,
-    %         message_id = _MessageId,
-    %         timestamp = _Timestamp,
-    %         type = _Type,
-    %         user_id = _UserId,
-    %         app_id = _AppId,
-    %         cluster_id = _ClusterId
-    %     },
-    %     payload = Payload
-    % } = AmqpMsg,
-    ok = lep_common:do_acknowledge(Chan, [{delivery_tag, DT}, {multiple, false}]),
-    {keep_state, StateData};
 handle_event(EventType, EventContent, CurentState, Data) ->
     lep_common:log("~p handle_event(~p, ~p, ~p, ~p)~n",
         [?MODULE, EventType, EventContent, CurentState, Data]),

@@ -46,4 +46,4 @@ init({}) ->
 
 -spec consumers() -> proplists:proplist().
 consumers() ->
-    [ {Id, Pid} || {Id, Pid, _, _} <- supervisor:which_children(?MODULE) ].
+    [ {Id, Pid, lep_consume_sm:state(Pid)} || {Id, Pid, _, _} <- supervisor:which_children(?MODULE) ].

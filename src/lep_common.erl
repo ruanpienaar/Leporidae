@@ -9,6 +9,7 @@
     bind_queue_exchange/2,
     do_publish/4,
     do_consume/3,
+    do_get/2,
     do_acknowledge/2,
     do_subscribe/3,
     log/1,
@@ -178,6 +179,38 @@ do_consume(Chan, ConsumerTag, Consume) ->
     },
     log(" === ~p CONSUME === ~n~p~n", [self(), BasicConsume]),
     amqp_channel:call(Chan, BasicConsume).
+
+do_get(Chan, Get) ->
+    BasicGet = #'basic.get'{
+        queue = proplists:get_value(queue, Get),
+        no_ack = true
+    },
+    {GetOk, AmqpMsg} = amqp_channel:call(Chan, BasicGet),
+    log(" === ~p GET === ~n~p~n~p~n", [self(), GetOk, AmqpMsg]),
+    case AmqpMsg of
+        <<>> ->
+            <<>>;
+        #amqp_msg{
+            props = #'P_basic'{
+                content_type = _ContentType,
+                content_encoding = _ContentEncoding,
+                headers = _Headers,
+                delivery_mode = _DeliveryMode,
+                priority = _Priority,
+                correlation_id = _CorrelationId,
+                reply_to = _ReplyTo,
+                expiration = _Expiration,
+                message_id = _MessageId,
+                timestamp = _Timestamp,
+                type = _Type,
+                user_id = _UserId,
+                app_id = _AppId,
+                cluster_id = _ClusterId
+            },
+            payload = Payload
+        } = AmqpMsg ->
+            Payload
+    end.
 
 do_acknowledge(Chan, Ack) ->
     BasicAck = #'basic.ack'{

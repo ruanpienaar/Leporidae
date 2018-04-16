@@ -46,4 +46,4 @@ init({}) ->
 
 -spec producers() -> proplists:proplist().
 producers() ->
-    [ {Id, Pid} || {Id, Pid, _, _} <- supervisor:which_children(?MODULE) ].
+    [ {Id, Pid, lep_produce_sm:state(Pid)} || {Id, Pid, _, _} <- supervisor:which_children(?MODULE) ].
