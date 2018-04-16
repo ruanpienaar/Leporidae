@@ -34,7 +34,7 @@ init({}) ->
         {
          [?CHILD(
             list_to_atom("consumer_"++integer_to_list(Count)),
-            lep_consume,
+            lep_consume_sm, % lep_consume,
             worker,
             CArgs
          )|C],
