@@ -1,7 +1,7 @@
 -module(lep_consume_sm).
 
 -behaviour(gen_statem).
--include_lib("../amqp_client/include/amqp_client.hrl").
+-include_lib("amqp_client/include/amqp_client.hrl").
 -include("leporidae.hrl").
 
 %% API
@@ -66,6 +66,7 @@ init({AMQPArgs}) ->
         end,
     StateData =
         #{ amqp_args => AMQPArgs,
+           consume_type => ConsType,
            consume => Consume,
            get => Get,
            amqp_connection => undefined,
@@ -75,7 +76,8 @@ init({AMQPArgs}) ->
            amqp_queue => undefined,
            amqp_exchange => undefined,
            last_error => undefined,
-           connected_actions => ConnectedActions
+           connected_actions => ConnectedActions,
+           consume_worker_mod => proplists:get_value(consume_worker_mod, AMQPArgs)
         },
     {ok, notconnection, StateData, [{timeout, 0, establish_connection} ]}.
 
@@ -199,13 +201,24 @@ handle_event(info, {BasicDeliver, AmqpMsg}, consuming, StateData) ->
     lep_common:log(" === ~p AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
     #{ amqp_channel := Chan,
        consumer_tag := CT,
-       amqp_exchange := Exchange
+       consume_worker_mod := Mod
        } = StateData,
     #'basic.deliver'{
         consumer_tag = CT,
         delivery_tag = DT
     } = BasicDeliver,
-    ok = lep_common:do_acknowledge(Chan, [{delivery_tag, DT}, {multiple, false}]),
+    % TODO: how do we prevent the consume function
+    % from hanging ?
+    try
+        ok = Mod:consume(AmqpMsg),
+        Ack = [{delivery_tag, DT}, {multiple, false}],
+        ok = lep_common:do_acknowledge(Chan, Ack)
+    catch
+        C:E ->
+            NAck = [{delivery_tag, DT}, {multiple, false}, {requeue, true}],
+            ok = lep_common:do_no_acknowledge(Chan, NAck),
+            lep_common:log("Message consume failed ~p ~p ", [C, E])
+    end,
     {keep_state, StateData};
 %% ---  Get
 handle_event({call, From}, get, connected_and_chan, StateData) ->
@@ -231,13 +244,25 @@ handle_event(info, {BasicDeliver, AmqpMsg}, subscribed, StateData) ->
     lep_common:log(" === ~p AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
     #{ amqp_channel := Chan,
        consumer_tag := CT,
-       amqp_exchange := Exchange
+       consume_worker_mod := Mod
        } = StateData,
     #'basic.deliver'{
         consumer_tag = CT,
         delivery_tag = DT
     } = BasicDeliver,
-    ok = lep_common:do_acknowledge(Chan, [{delivery_tag, DT}, {multiple, false}]),
+    % TODO: how do we prevent the consume function
+    % from hanging ?
+    try
+        ok = Mod:consume(AmqpMsg),
+        Ack = [{delivery_tag, DT}, {multiple, false}],
+        ok = lep_common:do_acknowledge(Chan, Ack)
+    catch
+        C:E ->
+            NAck = [{delivery_tag, DT}, {multiple, false}, {requeue, true}],
+            ok = lep_common:do_no_acknowledge(Chan, NAck),
+            lep_common:log("Message consume failed ~p ~p ", [C, E])
+    end,
+    % ok = lep_common:do_acknowledge(Chan, [{delivery_tag, DT}, {multiple, false}]),
     {keep_state, StateData};
 %% --- DOWN
 handle_event(info, D={'DOWN', Ref, process, Pid, DownReason}, CurentState, StateData) ->

@@ -11,6 +11,7 @@
     do_consume/3,
     do_get/2,
     do_acknowledge/2,
+    do_no_acknowledge/2,
     do_subscribe/3,
     log/1,
     log/2
@@ -219,6 +220,15 @@ do_acknowledge(Chan, Ack) ->
     },
     log(" === ~p ACK === ~n~p~n", [self(), BasicAck]),
     amqp_channel:call(Chan, BasicAck).
+
+do_no_acknowledge(Chan, NAck) ->
+    BasicNAck = #'basic.nack'{
+        delivery_tag = proplists:get_value(delivery_tag, NAck),
+        multiple = proplists:get_value(multiple, NAck, false),
+        requeue = proplists:get_value(requeue, NAck, true)
+    },
+    log(" === ~p NACK === ~n~p~n", [self(), BasicNAck]),
+    amqp_channel:call(Chan, BasicNAck).
 
 do_subscribe(Chan, Queue, SubscriberPid) ->
     BasicConsume = #'basic.consume'{
