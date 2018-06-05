@@ -160,7 +160,7 @@ do_publish(Chan, Publish, Basic, Payload) when is_pid(Chan) andalso
     },
     try
         %% TODO: maybe not try_catch, and let the gen_statem, crash/go-into-another state ?
-        log(" === ~p PUBLISH === ~n~p~n~p~n", [self(), BasicPublish, AMQPMsg]),
+        %log(" === ~p PUBLISH === ~n~p~n~p~n", [self(), BasicPublish, AMQPMsg]),
         ok = amqp_channel:call(Chan, BasicPublish, AMQPMsg)
     catch
         C:E ->
@@ -218,7 +218,7 @@ do_acknowledge(Chan, Ack) ->
         delivery_tag = proplists:get_value(delivery_tag, Ack),
         multiple = proplists:get_value(multiple, Ack, false)
     },
-    log(" === ~p ACK === ~n~p~n", [self(), BasicAck]),
+    %log(" === ~p ACK === ~n~p~n", [self(), BasicAck]),
     amqp_channel:call(Chan, BasicAck).
 
 do_no_acknowledge(Chan, NAck) ->

@@ -19,3 +19,7 @@
 ☐ consumers - noack when fails.
 ☐ consumers - cancel a consumer
 ☐ consumers - ACK and NACK details from sys.config
+
+sys.config:
+ ☐ rename producers to publishers
+ ☐ create producer id/name, so that code call reference a specific item

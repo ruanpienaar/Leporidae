@@ -197,8 +197,8 @@ handle_event(info, M=#'basic.consume_ok'{consumer_tag = CT}, consuming, StateDat
     % TODO: should we reuse this consumer, or keep creating consumers ?
     {keep_state, StateData#{ consumer_tag => CT }};
 handle_event(info, {BasicDeliver, AmqpMsg}, consuming, StateData) ->
-    lep_common:log(" === ~p DELIVERY === ~n~p~n", [self(), BasicDeliver]),
-    lep_common:log(" === ~p AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
+    %lep_common:log(" === ~p consuming DELIVERY === ~n~p~n", [self(), BasicDeliver]),
+    %lep_common:log(" === ~p consuming AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
     #{ amqp_channel := Chan,
        consumer_tag := CT,
        consume_worker_mod := Mod
@@ -240,8 +240,8 @@ handle_event(info, M=#'basic.consume_ok'{consumer_tag = CT}, subscribed, StateDa
     % TODO: should we reuse this consumer, or keep creating consumers ?
     {keep_state, StateData#{ consumer_tag => CT }};
 handle_event(info, {BasicDeliver, AmqpMsg}, subscribed, StateData) ->
-    lep_common:log(" === ~p DELIVERY === ~n~p~n", [self(), BasicDeliver]),
-    lep_common:log(" === ~p AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
+    %lep_common:log(" === ~p subscribed DELIVERY === ~n~p~n", [self(), BasicDeliver]),
+    %lep_common:log(" === ~p subscribed AMQP MSG === ~n~p~n", [self(), AmqpMsg]),
     #{ amqp_channel := Chan,
        consumer_tag := CT,
        consume_worker_mod := Mod
