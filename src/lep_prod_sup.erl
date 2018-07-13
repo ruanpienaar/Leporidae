@@ -3,7 +3,10 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/0]).
+-export([
+    start_link/0,
+    add_child/1
+]).
 
 %% Supervisor callbacks
 -export([
@@ -47,3 +50,17 @@ init({}) ->
 -spec producers() -> proplists:proplist().
 producers() ->
     [ {Id, Pid, lep_produce_sm:state(Pid)} || {Id, Pid, _, _} <- supervisor:which_children(?MODULE) ].
+
+-spec add_child(proplists:proplist()) ->
+    {ok, Child :: supervisor:child()} |
+    {ok, Child :: supervisor:child(), Info :: term()} |
+    {error, already_present | {already_started, Child :: supervisor:child()} | term()}.
+add_child(PArgs) ->
+    Count = length(supervisor:which_children(?MODULE))+1,
+    ChildSpec = ?CHILD(
+        list_to_atom("producer_"++integer_to_list(Count)),
+        lep_produce_sm, % lep_produce,
+        worker,
+        PArgs
+     ),
+    supervisor:start_child(lep_prod_sup, ChildSpec).
