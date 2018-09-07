@@ -28,19 +28,24 @@
 % handle_event/4 -> For callback_mode() =:= handle_event_function
 
 start_link(AMQPArgs) ->
-    gen_statem:start_link(?MODULE, {AMQPArgs}, []).
+    case proplists:get_value(name, AMQPArgs, []) of
+        {name, Name} ->
+            gen_statem:start_link({local, Name}, ?MODULE, {AMQPArgs}, []);
+        [] ->
+            gen_statem:start_link(?MODULE, {AMQPArgs}, [])
+    end.
 
-state(Pid) ->
-    sys:get_state(Pid).
+state(NameOrPid) ->
+    sys:get_state(NameOrPid).
 
-% consume(Pid) ->
-%     gen_statem:call(Pid, consume, 1000).
+% consume(NameOrPid) ->
+%     gen_statem:call(NameOrPid, consume, 1000).
 
-get(Pid) ->
-    gen_statem:call(Pid, get, 1000).
+get(NameOrPid) ->
+    gen_statem:call(NameOrPid, get, 1000).
 
-% publish(Pid, Data) ->
-%     gen_statem:call(Pid, {publish, Data}).
+% publish(NameOrPid, Data) ->
+%     gen_statem:call(NameOrPid, {publish, Data}).
 
 % @doc 3 possible states:
 % - connected_and_chan   - connection established and channel established
