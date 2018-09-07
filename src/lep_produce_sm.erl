@@ -27,10 +27,10 @@
 
 start_link(AMQPArgs) ->
     case proplists:get_value(name, AMQPArgs, []) of
-        {name, Name} ->
-            gen_statem:start_link({local, Name}, ?MODULE, {AMQPArgs}, []);
         [] ->
-            gen_statem:start_link(?MODULE, {AMQPArgs}, [])
+            gen_statem:start_link(?MODULE, {AMQPArgs}, []);
+        Name ->
+            gen_statem:start_link({local, Name}, ?MODULE, {AMQPArgs}, [])
     end.
 
 state(NameOrPid) ->
