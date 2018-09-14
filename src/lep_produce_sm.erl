@@ -26,12 +26,7 @@
 % handle_event/4 -> For callback_mode() =:= handle_event_function
 
 start_link(AMQPArgs) ->
-    case proplists:get_value(name, AMQPArgs, []) of
-        [] ->
-            gen_statem:start_link(?MODULE, {AMQPArgs}, []);
-        Name ->
-            gen_statem:start_link({local, Name}, ?MODULE, {AMQPArgs}, [])
-    end.
+    gen_statem:start_link(?MODULE, {AMQPArgs}, []).
 
 state(NameOrPid) ->
     sys:get_state(NameOrPid).
