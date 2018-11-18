@@ -47,7 +47,7 @@ loop(StateMap, Parent) ->
         undefined -> %% Startup
             ok;
         _Pid ->      %% Running
-            lists:foreach(fun({I,PPid,worker,_Mods}) ->
+            lists:foreach(fun({_I, PPid, worker, _Mods}) ->
                 true = insert(object(PPid))
             end, supervisor:which_children(lep_prod_sup))
     end,

@@ -71,17 +71,17 @@ run_proc(TimeToLoadTest) ->
             ok
     end.
 
-add_load_test_generator(Name, Pid) ->
-    Spec = ponos_load_specs:make_constant(5000.0),
-    Task =
-        fun() ->
-            Data = term_to_binary({erlang:system_time(), erlang:time_offset()}),
-            lep_produce_sm:publish(Pid, Data)
-        end,
-    LoadGenOpts = [{name, Name},
-                   {load_spec, Spec},
-                   {task, Task}],
-    [ok] = ponos:add_load_generators(LoadGenOpts).
+% add_load_test_generator(Name, Pid) ->
+%     Spec = ponos_load_specs:make_constant(5000.0),
+%     Task =
+%         fun() ->
+%             Data = term_to_binary({erlang:system_time(), erlang:time_offset()}),
+%             lep_produce_sm:publish(Pid, Data)
+%         end,
+%     LoadGenOpts = [{name, Name},
+%                    {load_spec, Spec},
+%                    {task, Task}],
+%     [ok] = ponos:add_load_generators(LoadGenOpts).
 
 pp() ->
     ptop:pp().

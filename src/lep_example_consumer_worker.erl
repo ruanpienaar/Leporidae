@@ -21,5 +21,4 @@ consume(AMQPMsg = #amqp_msg{
             },
             payload = _Payload
         }) ->
-    %io:format("~p -> consume -> ~p~n", [?MODULE, AMQPMsg]).
-    ok.
+    io:format("~p -> consume -> ~p~n", [?MODULE, AMQPMsg]).

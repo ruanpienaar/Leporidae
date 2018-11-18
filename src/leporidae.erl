@@ -50,7 +50,7 @@ start_lep(Type, RestArgs) ->
             ok = application:set_env(leporidae, consumers, Consumers),
             ok = application:set_env(leporidae, producers, []);
         {publish, Payload} ->
-            Pid = register(producer,
+            true = register(producer,
                 spawn(fun() -> payload_sender_loop(Payload) end)
             ),
             print("Setting producers ....~n", []),
